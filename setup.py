@@ -10,18 +10,18 @@ with open(path.join(this_directory, r'README'), encoding='utf-8') as f:
 setup(
     name = 'lppinv',
     packages = ['lppinv'],
-    version = '0.2.1',
+    version = '0.3.2',
     license = 'MIT',
     description = '"Hybrid" LS-LP model pseudoinverse-based (SVD-based) solving algorithm',
     long_description=readme_text,
     author = 'econcz',
     author_email = '29724411+econcz@users.noreply.github.com',
     url = 'https://github.com/econcz/lppinv',
-    download_url = 'https://github.com/econcz/lppinv/archive/pypi-0_2_1.tar.gz',
+    download_url = 'https://github.com/econcz/lppinv/archive/pypi-0_3_2.tar.gz',
     keywords = [
         'least squares', 'linear programming', 'pseudoinverse', 'singular value decomposition',
         'constrained OLS', 'relationship matrix', 'custom',
-        'numpy'
+        'numpy', 'mathematics'
     ],
     install_requires = ['numpy'],
     classifiers = [

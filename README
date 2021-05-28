@@ -70,32 +70,40 @@ Parameters:
 
 # LS-LP type and input
 
--  ``lp`` : *str* or *unicode*, optional ‘cOLS’ (Constrained OLS), ‘RM’
-   (Relationship Matrix), or ‘custom’ (user-defined case).
--  ``lhs`` : *sequence* of *array_like* Left-hand side of the problem
-   (**NB** 3D iterable for lp=‘cOLS’).
--  ``rhs`` : *sequence* of *array_like* Right-hand side of the problem
-   (**NB** row sums first for lp=‘RM’).
--  ``svar`` : *array_like* Slack variables.
+-  ``lp`` : *str* or *unicode*, optional.
+   ‘cOLS’ (Constrained OLS), ‘RM’ (Relationship Matrix), or ‘custom’
+   (user-defined case).
+-  ``lhs`` : *sequence* of *array_like*.
+   Left-hand side of the problem (**NB** 3D iterable for lp=‘cOLS’).
+-  ``rhs`` : *sequence* of *array_like*.
+   Right-hand side of the problem (**NB** row sums first for lp=‘RM’).
+-  ``svar`` : *array_like*.
+   Slack variables.
 
 # ``a`` and estimation
 
--  ``diag`` : *bool*, optional Diagonal of M x N (**NB** for lp=‘RM’).
--  ``rcond`` : *float*, optional Cut-off ratio for small singular values
-   of ``a``. For the purposes of rank determination, singular values are
-   treated as zero if they are smaller than rcond times the largest
-   singular value of ``a`` in ``numpy.linalg.lstsq(a, b, rcond=rcond)``.
+-  ``diag`` : *bool*, optional.
+   Diagonal of M x N (**NB** for lp=‘RM’).
+-  ``rcond`` : *float*, optional.
+   Cut-off ratio for small singular values of ``a``. For the purposes of
+   rank determination, singular values are treated as zero if they are
+   smaller than rcond times the largest singular value of ``a`` in
+   ``numpy.linalg.lstsq(a, b, rcond=rcond)``.
 
 Returns:
 --------
 
--  ``x`` : ``{(N,), (N, K)}`` *ndarray* Least-squares solution.
--  ``mse`` : *float* Sums of squared residuals: Squared Euclidean 2-norm
-   for each column in \`\ ``b - a @ x``. If the rank of ``a`` is < ``N``
-   or ``M`` <= ``N``, a problem-specific formula is applied. **NB**
-   Empty for lp=‘custom’ (must be calculated by user).
--  ``a`` : (*ndarray*, *int*) *tuple* Matrix ``a``, Rank of ``a``.
--  ``s`` : ``(min(M, N),)`` *ndarray* Singular values of ``a``.
+-  ``x`` : ``{(N,), (N, K)}`` *ndarray*.
+   Least-squares solution.
+-  ``mse`` : *float*.
+   Sums of squared residuals: Squared Euclidean 2-norm for each column
+   in \`\ ``b - a @ x``. If the rank of ``a`` is < ``N`` or ``M`` <=
+   ``N``, a problem-specific formula is applied. **NB** Empty for
+   lp=‘custom’ (must be calculated by user).
+-  ``a`` : (*ndarray*, *int*) *tuple*.
+   Matrix ``a``, Rank of ``a``.
+-  ``s`` : ``(min(M, N),)`` *ndarray*.
+   Singular values of ``a``.
 
 Raises:
 -------

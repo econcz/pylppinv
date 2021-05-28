@@ -157,7 +157,7 @@ def solve(
                 a = np.row_stack([a, np.array(lhs)])
         if lp == 'custom':                             # LS-LP type: custom
             a = np.array(lhs)
-        if np.array(svar).size:                        # add slack variables
+        if np.array(svar).size:                        # slack variables
             a = np.column_stack([a, (
                 np.concatenate([
                     np.array(svar), np.zeros(b.size - np.array(svar).size)
@@ -168,10 +168,13 @@ def solve(
         raise LPpinvError("Misspecified LHS, RHS, or SVAR")
 
     # Obtain an SVD-based solution ------------------------------------------- #
-    soln    = list(np.linalg.lstsq(a, b, rcond))
+    soln = list(np.linalg.lstsq(a, b, rcond))
+    if np.array(svar).size:                        # slack variables
+        if lp == 'cOLS':                           # LS-LP type: cOLS
+            soln[0] = soln[0][0:-1]
+        if lp == 'RM':                             # LS-LP type: RM
+            soln[0] = soln[0][0:r * c].reshape(r, c)
     soln[2] = a, soln[2]
-    if lp == 'RM':                                     # LS-LP type: RM
-        soln[0] = soln[0][0:r * c].reshape(r, c)
 
     # Calculate MSE ---------------------------------------------------------- #
     if not np.array(soln[1]).size:
