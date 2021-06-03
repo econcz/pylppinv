@@ -4,8 +4,8 @@
 The algorithm solves “hybrid” least squares linear programming (LS-LP)
 problems with the help of the Moore-Penrose inverse (pseudoinverse),
 calculated using singular value decomposition (SVD), with emphasis on
-estimation of non-typical constrained OLS (cOLS), Relationship Matrix
-(RM) [1], and custom (user-defined) cases. The pseudoinverse offers a
+estimation of non-typical constrained OLS (cOLS), Transaction Matrix
+(TM) [1], and custom (user-defined) cases. The pseudoinverse offers a
 unique solution and may be the best linear unbiased estimator (BLUE) for
 a group of problems under certain conditions [2].
 
@@ -14,7 +14,7 @@ a group of problems under certain conditions [2].
   given the textbook or any other definition of its peaks, troughs, and
   saddles.”*
 
-| Example of an RM problem:
+| Example of an TM problem:
 | *“Estimate the input-output table or a matrix of trade / investment /
   etc., the technical coefficients or (country) shares of which are
   unknown.”*
@@ -29,7 +29,7 @@ Figure 1. Each part of ``a`` can be omitted to accommodate a special
 case:
 
 -  cOLS problems require no case-specific CONSTRAINTS;
--  RM problems require case-specific CONSTRAINTS, no problem
+-  TM problems require case-specific CONSTRAINTS, no problem
    CONSTRAINTS, and an optional MODEL;
 -  SLACK VARIABLES are non-zero only for inequality constraints and are
    omitted if problems don’t include any;
@@ -51,8 +51,8 @@ Source: self-prepared
   dimensions can be calculated using the formulas:
 | ``(2 * N) x (K + K*    )`` cOLS without slack variables;
 | ``(2 * N) x (K + K* + 1)`` cOLS with slack variables;
-| ``(M * N) x (M * N)`` RM without slack variables;
-| ``(M * N) x (M * N + 1)`` RM with slack variables;
+| ``(M * N) x (M * N)`` TM without slack variables;
+| ``(M * N) x (M * N + 1)`` TM with slack variables;
 | ``M x N`` custom without slack variables;
 | ``M x (N + 1)`` custom with slack variables;
 
@@ -60,8 +60,8 @@ Source: self-prepared
   in the model (including the constant),
 | ``K*`` (``K* \not \in K``) is the number of extra variables in
   CONSTRAINTS, and ``N`` is the number of observations;
-| in ``RM`` problems, ``M`` and ``N`` are the dimensions of the
-  relationship matrix;
+| in ``TM`` problems, ``M`` and ``N`` are the dimensions of the
+  transaction matrix;
 | and in custom cases, ``M`` and ``N`` or ``M x (N + 1)`` are the
   dimensions of ``a`` (fully user-defined).
 
@@ -71,19 +71,19 @@ Parameters:
 # LS-LP type and input
 
 -  ``lp`` : *str* or *unicode*, optional.
-   ‘cOLS’ (Constrained OLS), ‘RM’ (Relationship Matrix), or ‘custom’
+   ‘cOLS’ (Constrained OLS), ‘TM’ (Transaction Matrix), or ‘custom’
    (user-defined case).
 -  ``lhs`` : *sequence* of *array_like*.
    Left-hand side of the problem (**NB** 3D iterable for lp=‘cOLS’).
 -  ``rhs`` : *sequence* of *array_like*.
-   Right-hand side of the problem (**NB** row sums first for lp=‘RM’).
+   Right-hand side of the problem (**NB** row sums first for lp=‘TM’).
 -  ``svar`` : *array_like*.
    Slack variables.
 
 # ``a`` and estimation
 
 -  ``diag`` : *bool*, optional.
-   Diagonal of M x N (**NB** for lp=‘RM’).
+   Diagonal of M x N (**NB** for lp=‘TM’).
 -  ``rcond`` : *float*, optional.
    Cut-off ratio for small singular values of ``a``. For the purposes of
    rank determination, singular values are treated as zero if they are
@@ -127,9 +127,9 @@ Examples:
        svar=[-1, 1, -1, 0]
    )
 
-   # RM problem
+   # TM problem
    lp.solve(
-       lp='RM',
+       lp='TM',
        rhs=[[4, 5, 3, 4, 6], [1, 2], [0, 0]],
        diag=True
    )
@@ -145,12 +145,12 @@ Examples:
 Notes:
 ------
 
-**[1]** Relationship Matrix (RM) of size ``M x N`` is a formal model of
-relationships between ``M`` and ``N`` elements in a system. For example,
+**[1]** Transaction Matrix (TM) of size ``M x N`` is a formal model of
+transactions between ``M`` and ``N`` elements in a system. For example,
 
--  an input-output table (IOT) is a type of RM where ``M = N`` and the
+-  an input-output table (IOT) is a type of TM where ``M = N`` and the
    elements are industries;
--  a matrix of trade / investment / etc. is a type of RM where ``M = N``
+-  a matrix of trade / investment / etc. is a type of TM where ``M = N``
    and the elements are countries or (macro)regions in which diagonal
    elements can, in some cases, all be equal to zero.
 

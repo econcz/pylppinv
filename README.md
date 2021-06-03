@@ -1,13 +1,13 @@
 # "Hybrid" LS-LP model pseudoinverse-based (SVD-based) solving algorithm
 
 
-The algorithm solves "hybrid" least squares linear programming (LS-LP) problems with the help of the Moore-Penrose inverse (pseudoinverse), calculated using singular value decomposition (SVD), with emphasis on estimation of non-typical constrained OLS (cOLS), Relationship Matrix (RM) [1], and custom (user-defined) cases. The pseudoinverse offers a unique solution and may be the best linear unbiased estimator (BLUE) for a group of problems under certain conditions [2].
+The algorithm solves "hybrid" least squares linear programming (LS-LP) problems with the help of the Moore-Penrose inverse (pseudoinverse), calculated using singular value decomposition (SVD), with emphasis on estimation of non-typical constrained OLS (cOLS), Transaction Matrix (TM) [1], and custom (user-defined) cases. The pseudoinverse offers a unique solution and may be the best linear unbiased estimator (BLUE) for a group of problems under certain conditions [2].
 
 Example of a non-typical cOLS problem:  
 *"Estimate the trend and the cyclical component of a country's GDP given the textbook or any other definition of its peaks, troughs, and saddles."*
 
 
-Example of an RM problem:  
+Example of an TM problem:  
 *"Estimate the input-output table or a matrix of trade / investment / etc., the technical coefficients or (country) shares of which are unknown."*
 
 
@@ -15,7 +15,7 @@ Example of an RM problem:
 The problem is written as a matrix equation ``a @ x = b`` where `a` consists of coefficients for CONSTRAINTS and for SLACK VARIABLES (the upper part) as well as for MODEL (the lower part) as illustrated in Figure 1. Each part of `a` can be omitted to accommodate a special case:
 
 - cOLS problems require no case-specific CONSTRAINTS;
-- RM problems require case-specific CONSTRAINTS, no problem CONSTRAINTS, and an optional MODEL;
+- TM problems require case-specific CONSTRAINTS, no problem CONSTRAINTS, and an optional MODEL;
 - SLACK VARIABLES are non-zero only for inequality constraints and are omitted if problems don't include any;
 
 ...
@@ -32,15 +32,15 @@ The solution of the equation, ``x = pinv(a) @ b``, is calculated with the help o
 To check if `a` is within computational limits, its (maximum) dimensions can be calculated using the formulas:  
 ``(2 * N) x (K + K*    )`` cOLS without slack variables;  
 ``(2 * N) x (K + K* + 1)`` cOLS with slack variables;  
-``(M * N) x (M * N)`` RM without slack variables;  
-``(M * N) x (M * N + 1)`` RM with slack variables;  
+``(M * N) x (M * N)`` TM without slack variables;  
+``(M * N) x (M * N + 1)`` TM with slack variables;  
 ``M x N`` custom without slack variables;  
 ``M x (N + 1)`` custom with slack variables;  
 
 
 where, in cOLS problems, `K` is the number of independent variables in the model (including the constant),  
 `K*` (``K* \not \in K``) is the number of extra variables in CONSTRAINTS, and `N` is the number of observations;  
-in `RM` problems, `M` and `N` are the dimensions of the relationship matrix;  
+in `TM` problems, `M` and `N` are the dimensions of the transaction matrix;  
 and in custom cases, `M` and `N` or `M x (N + 1)` are the dimensions of `a` (fully user-defined).
 
 
@@ -48,18 +48,18 @@ and in custom cases, `M` and `N` or `M x (N + 1)` are the dimensions of `a` (ful
 \# LS-LP type and input
 
 - `lp` : *str* or *unicode*, optional.  
-'cOLS' (Constrained OLS), 'RM' (Relationship Matrix), or 'custom' (user-defined case).
+'cOLS' (Constrained OLS), 'TM' (Transaction Matrix), or 'custom' (user-defined case).
 - `lhs` : *sequence* of *array_like*.  
 Left-hand side of the problem (**NB** 3D iterable for lp='cOLS').
 - `rhs` : *sequence* of *array_like*.  
-Right-hand side of the problem (**NB** row sums first for lp='RM').
+Right-hand side of the problem (**NB** row sums first for lp='TM').
 - `svar` : *array_like*.  
 Slack variables.
 
 \# `a` and estimation
 
 - `diag` : *bool*, optional.  
-Diagonal of M x N (**NB** for lp='RM').
+Diagonal of M x N (**NB** for lp='TM').
 - `rcond` : *float*, optional.  
 Cut-off ratio for small singular values of `a`. For the purposes of rank determination, singular values are treated as zero if they are smaller than rcond times the largest singular value of `a` in ``numpy.linalg.lstsq(a, b, rcond=rcond)``.
 
@@ -93,9 +93,9 @@ lp.solve(
 	svar=[-1, 1, -1, 0]
 )
 
-# RM problem
+# TM problem
 lp.solve(
-	lp='RM',
+	lp='TM',
 	rhs=[[4, 5, 3, 4, 6], [1, 2], [0, 0]],
 	diag=True
 )
@@ -111,9 +111,9 @@ lp.solve(
 
 
 ## Notes:
-**[1]** Relationship Matrix (RM) of size `M x N` is a formal model of relationships between `M` and `N` elements in a system. For example,
+**[1]** Transaction Matrix (TM) of size `M x N` is a formal model of transactions between `M` and `N` elements in a system. For example,
 
-- an input-output table (IOT) is a type of RM where ``M = N`` and the elements are industries;
-- a matrix of trade / investment / etc. is a type of RM where ``M = N`` and the elements are countries or (macro)regions in which diagonal elements can, in some cases, all be equal to zero.
+- an input-output table (IOT) is a type of TM where ``M = N`` and the elements are industries;
+- a matrix of trade / investment / etc. is a type of TM where ``M = N`` and the elements are countries or (macro)regions in which diagonal elements can, in some cases, all be equal to zero.
 
 **[2]** For example, consult Albert, A., 1972. Regression And The Moore-Penrose Pseudoinverse. New York: Academic Press. Chapter VII.
