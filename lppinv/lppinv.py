@@ -163,7 +163,7 @@ def solve(
                     np.array(svar), np.zeros(b.size - np.array(svar).size)
                 ]) if lp == 'cOLS' else np.array(svar)
             ).T])
-        assert a                                       # check for `a`
+        s = a.size                                     # check for `a`
     except:
         raise LPpinvError("Misspecified LHS, RHS, or SVAR")
 
