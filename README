@@ -95,11 +95,8 @@ Returns:
 
 -  ``x`` : ``{(N,), (N, K)}`` *ndarray*.
    Least-squares solution.
--  ``mse`` : *float*.
-   Sums of squared residuals: Squared Euclidean 2-norm for each column
-   in \`\ ``b - a @ x``. If the rank of ``a`` is < ``N`` or ``M`` <=
-   ``N``, a problem-specific formula is applied. **NB** Empty for
-   lp=‘custom’ (must be calculated by user).
+-  ``nrmse`` : *float*.
+   Square root of sums of squared residuals normalized by variance of b.
 -  ``a`` : (*ndarray*, *int*) *tuple*.
    Matrix ``a``, Rank of ``a``.
 -  ``s`` : ``(min(M, N),)`` *ndarray*.

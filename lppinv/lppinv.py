@@ -1,7 +1,7 @@
 """
 ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 "Hybrid" LS-LP model pseudoinverse-based (SVD-based) solving algorithm
-© econcz, 2021
+© econcz, 2022
 ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
 Overview:
@@ -87,12 +87,9 @@ Returns:
     x         : {(N,), (N, K)} ndarray
                 Least-squares solution. If b is two-dimensional, the solutions
                 are in the K columns of x.
-    mse       : float
-                Sums of squared residuals: Squared Euclidean 2-norm for each
-                column in `b - a @ x'. If the rank of a is < N or M <= N,
-                a problem-specific formula is applied. If b is 1-dimensional,
-                this is a (1,) shape array. Otherwise the shape is (K,).
-                NB Empty for lp='custom' (must be calculated by user).
+    nrmse     : float
+                Square root of sums of squared residuals normalized by variance
+                of b.
     a         : (ndarray, int) tuple
                 Matrix `a', Rank of a.
     s         : (min(M, N),) ndarray
@@ -169,6 +166,10 @@ def solve(
 
     # Obtain an SVD-based solution ------------------------------------------- #
     soln = list(np.linalg.lstsq(a, b, rcond))
+    soln[1] = np.sqrt(
+        np.sum(np.square(b - a @ soln[0])) /           # normalized RMSE
+        np.var(b)
+    )
     if np.array(svar).size:                            # slack variables
         if lp == 'cOLS':
             soln[0] = soln[0][0:-1]
@@ -177,15 +178,6 @@ def solve(
     if lp == 'TM':                                     # LS-LP type: TM
         soln[0] = soln[0].reshape(r, c)
     soln[2] = a, soln[2]
-
-    # Calculate MSE ---------------------------------------------------------- #
-    if not np.array(soln[1]).size:
-        if lp == 'TM':                                 # LS-LP type: TM
-            soln[1] = np.array([np.sum(np.square(
-                np.subtract(b, np.concatenate([
-                    soln[0].sum(axis=1 - i) for i in range(2)
-                ]))
-            ))])
 
     # Return the solution ---------------------------------------------------- #
     return soln
