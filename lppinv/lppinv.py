@@ -168,7 +168,7 @@ def solve(
     soln = list(np.linalg.lstsq(a, b, rcond))
     soln[1] = np.sqrt(
         np.sum(np.square(b - a @ soln[0])) /           # normalized RMSE
-        np.var(b)
+        len(b) / np.var(b)
     )
     if np.array(svar).size:                            # slack variables
         if lp == 'cOLS':
