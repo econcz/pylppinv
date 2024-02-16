@@ -1,29 +1,30 @@
 from distutils.core import setup
-from os import path
+from pathlib import Path
 
 # read the contents of your README file
-this_directory = path.abspath(path.dirname(__file__))
-with open(path.join(this_directory, r'README'), encoding='utf-8') as f:
-    readme_text = f.read()
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 # setup function
 setup(
     name = 'lppinv',
     packages = ['lppinv'],
-    version = '0.3.8',
+    version = '0.4.0',
     license = 'MIT',
-    description = '"Hybrid" LS-LP model pseudoinverse-based (SVD-based) solving algorithm',
-    long_description=readme_text,
+    description = 'A non-iterated general implementation of the LPLS estimator for cOLS, TM, and custom cases',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author = 'econcz',
     author_email = '29724411+econcz@users.noreply.github.com',
     url = 'https://github.com/econcz/lppinv',
-    download_url = 'https://github.com/econcz/lppinv/archive/pypi-0_3_8.tar.gz',
+    download_url = 'https://github.com/econcz/lppinv/archive/pypi-0_4_0.tar.gz',
     keywords = [
-        'least squares', 'linear programming', 'pseudoinverse', 'singular value decomposition',
-        'constrained OLS', 'relationship matrix', 'custom',
-        'numpy', 'mathematics'
+        'estimator', 'linear programming', 'least squares',
+        'OLS constrained in values', 'transaction matrix', 'custom',
+        'pseudoinverse', 'singular value decomposition',
+        'numpy', 'scipy', 'statsmodels'
     ],
-    install_requires = ['numpy'],
+    install_requires = ['numpy>=1.19', 'scipy>=1.10', 'statsmodels'],
     classifiers = [
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',

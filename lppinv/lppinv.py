@@ -1,183 +1,215 @@
-"""
-––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-"Hybrid" LS-LP model pseudoinverse-based (SVD-based) solving algorithm
-© econcz, 2022
-––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+import numpy           as     np
+from   scipy.linalg    import lstsq
+from   scipy.stats     import ttest_1samp
+from   statsmodels.api import OLS
 
-Overview:
-–––––––––
-The algorithm solves "hybrid" least squares linear programming (LS-LP) problems
-with the help of the Moore-Penrose inverse (pseudoinverse), calculated using
-singular value decomposition (SVD), with emphasis on estimation of non-typical
-constrained OLS (cOLS), Transaction Matrix (TM) [1], and custom (user-defined)
-cases. The pseudoinverse offers a unique solution and may be the best linear
-unbiased estimator (BLUE) for a group of problems under certain conditions [2].
-
-Example of a non-typical cOLS problem:
-- Estimate the trend and the cyclical component of a country's GDP given
-  the textbook or any other definition of its peaks, troughs, and saddles.
-
-Example of an TM problem:
-- Estimate the input-output table or a matrix of trade / investment / etc.,
-  the technical coefficients or (country) shares of which are unknown.
-
-Mechanism:
-––––––––––
-The problem is written as a matrix equation `a @ x = b` where `a` consists of
-coefficients for CONSTRAINTS and for SLACK VARIABLES (the upper part) as well
-as for MODEL (the lower part) as illustrated in Figure 1. Each part of `a` can
-be omitted to accommodate a special case:
-- cOLS problems require no case-specific CONSTRAINTS;
-- TM problems require case-specific CONSTRAINTS, no problem CONSTRAINTS, and
-  an optional MODEL;
-- SLACK VARIABLES are non-zero only for inequality constraints and are omitted
-  if problems don't include any;
-...
-
-Figure 1: Matrix equation `a @ x = b`
-                             `a`                            |       `b`
-+–––––––––––––––––––––––––––––––––––––––––+–––––––––––––––––+–––––––––––––––––+
-|  CONSTRAINTS (PROBLEM + CASE-SPECIFIC)  | SLACK VARIABLES |   CONSTRAINTS   |
-+–––––––––––––––––––––––––––––––––––––––––+–––––––––––––––––+–––––––––––––––––+
-|                           MODEL                           |      MODEL      |
-+–––––––––––––––––––––––––––––––––––––––––––––––––––––––––––+–––––––––––––––––+
-                                                            |
-Source: self-prepared
-
-The solution of the equation, `x = pinv(a) @ b`, is calculated with the help
-of numpy.linalg.lstsq(). To check if `a` is within computational limits, its
-(maximum) dimensions can be calculated using the formulas:
-
-- (2 * N) x (K + K*    )    cOLS without slack variables;
-- (2 * N) x (K + K* + 1)    cOLS with slack variables;
-- (M * N) x (M * N)         TM without slack variables;
-- (M * N) x (M * N + 1)     TM with slack variables;
-- M x N                     custom without slack variables;
-- M x (N + 1)               custom with slack variables;
-
-where, in cOLS problems, K is the number of independent variables in the model
-(including the constant), K* (K* \not \in K) is the number of extra variables
-in CONSTRAINTS, and N is the number of observations; in TM problems, M and N
-are the dimensions of the transaction matrix; and in custom cases, M and N or
-M x (N + 1) are the dimensions of `a` (fully user-defined).
-
-Parameters:
-–––––––––––
-    # LS-LP type and input
-    lp        : str or unicode, optional
-                'cOLS' (Constrained OLS), 'TM' (Transaction Matrix), or
-                'custom' (user-defined case).
-    lhs       : sequence of array_like
-                Left-hand side of the problem (NB 3D iterable for lp='cOLS').
-    rhs       : sequence of array_like
-                Right-hand side of the problem (NB row sums first for lp='TM').
-    svar      : array_like
-                Slack variables.
-    # `a` and estimation
-    diag      : bool, optional
-                Diagonal of M x N (NB for lp='TM').
-    rcond     : float, optional
-                Cut-off ratio for small singular values of a. For the purposes
-                of rank determination, singular values are treated as zero if
-                they are smaller than rcond times the largest singular value
-                of a in `numpy.linalg.lstsq(a, b, rcond=rcond)`.
-
-Returns:
-––––––––
-    x         : {(N,), (N, K)} ndarray
-                Least-squares solution. If b is two-dimensional, the solutions
-                are in the K columns of x.
-    nrmse     : float
-                Square root of sums of squared residuals normalized by variance
-                of b.
-    a         : (ndarray, int) tuple
-                Matrix `a', Rank of a.
-    s         : (min(M, N),) ndarray
-                Singular values of a.
-
-Raises:
-–––––––
-    LPpinvError  If the LS-LP problem is incorrectly specified.
-    LinAlgError  If computation does not converge.
-
-Notes:
-––––––
-[1] Transaction Matrix (TM) of size M x N is a formal model of transactions
-    between M and N elements in a system.
-    For example,
-    - an input-output table (IOT) is a type of TM where M = N and the elements
-      are industries;
-    - a matrix of trade / investment / etc. is a type of TM where M = N and
-      the elements are countries or (macro)regions in which diagonal elements
-      can, in some cases, all be equal to zero.
-
-[2] For example, consult Albert, A., 1972. Regression And The Moore-Penrose
-    Pseudoinverse. New York: Academic Press. Chapter VII.
-"""
-
-import numpy as np
+class LPpinvResult: # -------------------------------------------------------- #
+    """result class  """
+    def __init__(self, ols, ttest, x, a, nrmse, r2_c):
+        self.OLSResults  = ols
+        self.TtestResult = ttest
+        self.solution    = x
+        self.a           = a
+        self.nrmse       = nrmse
+        self.r2_c        = r2_c
+    def __repr__(self):
+        return('LPpinvResult('                                                 +
+                    'OLSResults='        + str(self.OLSResults       ) + ', '  +
+                    'TtestResult='       + str(self.TtestResult      ) + ', '  +
+                    'solution=np.array(' + str(self.solution.tolist()) + '), ' +
+                    'a=np.array('        + str(self.a.tolist()       ) + '), ' +
+                    'nrmse='             + str(self.nrmse            ) + ', '  +
+                    'r2_c='              + str(self.r2_c             ) + ')'   )
 
 class LPpinvError(Exception): # ---------------------------------------------- #
-    """error class"""
+    """error class   """
     pass
+
+def runiform(
+    # Function arguments (parameters) ---------------------------------------- #
+    r=None, c=None
+):
+    """dummy function"""
+    return (np.random.uniform(low=0.0, high=1.0, size=(r, c)))
 
 def solve(
     # Function arguments (parameters) ---------------------------------------- #
-    lp='custom', lhs=[[]], rhs=[[]], svar=[],          # LS-LP type and input
-    diag=None, rcond=None,                             # `a` and estimation
-    *args, **kwargs
+    cols=False, tm=False, rhs=np.empty((0,0)), model=np.empty((0,0)),
+    constraints=np.empty((0,0)), slackvars=np.empty((0,0)), zero_diagonal=False,
+    tolerance=None, level=95, seed=123456789, iterate=300,
+    distribution=runiform, mc=True, trace=True
 ):
-    """main function"""
-    # Check for errors ------------------------------------------------------- #
-    if lp not in ('cOLS', 'TM', 'custom'):             # LS-LP type
-        raise LPpinvError("Unknown LS-LP problem type")
+    """main function """
+    # general configuration -------------------------------------------------- #
+    lp = 'cols' if cols else 'tm' if tm else 'custom'
+    if cols and tm:
+        raise LPpinvError('Arguments cols and tm are mutually incompatible')
+    b  = np.array(rhs  )
+    M  = np.array(model)
+    C  = np.array(constraints)
+    S  = np.array(slackvars)
+    if level != int(level) or not (0 <= level <= 100):
+        raise LPpinvError('The confidence level must lie between 0 and 99')
 
-    # Construct `b` and `a` -------------------------------------------------- #
-    try:
-        b = (np.row_stack([np.array(l).reshape(len(l), 1) for l in rhs])
-             if lp != 'custom' else np.array(rhs))
-        if lp == 'cOLS':                               # LS-LP type: cOLS
-            a = np.row_stack([np.vstack(l).T for l in lhs])
-        if lp == 'TM':                                 # LS-LP type: TM
-            r, c = (len(l) for l in rhs[0:2])
-            a = np.row_stack([
-                np.kron(np.identity(r), np.ones(c)),   # row sums
-                np.kron(np.ones(r), np.identity(c)),   # column sums
+    # prepare LHS (left-hand side), `a`, and RHS (right-hand side), `b` ------ #
+    if lp.lower() == 'cols':                           # LS-LP type: cOLS       
+        if ((C.shape[0] + M.shape[0] > b.shape[0])):
+            b = np.concatenate([b, b])
+    if lp.lower() == 'tm':                             # LS-LP type: TM         
+        if (not b.shape[0] or ((b.shape[0] > 1) and (b.shape[1] != 2))
+                           or ((S.shape[0] > 1) and (S.shape[1] != 2))):
+            raise LPpinvError('TM requires two columns in `b`')
+        # C -> characteristic matrix                                            
+        i = b.shape[0] - M.shape[0]
+        r = np.sum(b[:i,0] < np.inf)                   # rows and cols          
+        c = np.sum(b[:i,1] < np.inf)
+        C = np.row_stack([
+            np.kron(np.identity(r), np.ones(c)),       # rowsums (first)        
+            np.kron(np.ones(r), np.identity(c)),       # colsums                
+        ])
+        # S -> characteristic matrix                                            
+        if S.shape != (0,0):
+            S =(lambda S: S[~np.isnan(S).any(axis=1)])(np.concatenate([
+                S[:,0], S[:,1]
+            ]).reshape((-1, 1)))
+    # M, C, S -> `a` --------------------------------------------------------- #
+    if zero_diagonal and lp.lower() == 'tm':           # diagonal of C -> M     
+        M = np.row_stack([
+            M if M.shape[0] else np.empty((0, r * c)),
+            [np.kron(np.identity(min(r, c))[i], np.identity(max(r, c))[i])
+             for i in range(min(r, c))]
+        ])
+    a = np.row_stack([
+        np.column_stack([C, S if S.shape[0] else np.empty((C.shape[0], 0))])
+        if C.shape[0]            else np.empty((0, M.shape[1] + S.shape[1])),
+        np.column_stack([M, np.zeros((M.shape[0],  S.shape[1]))           ])
+        if M.shape[0]            else np.empty((0, C.shape[1] + S.shape[1]))
+    ])
+    # `b` -> (-1, 1) --------------------------------------------------------- #
+    if lp.lower() == 'tm':
+        b = np.concatenate([b[:r,0], b[:c,1],
+            np.sum(b[max(r, c):,:], axis=1) if b.shape[0] > max(r, c)
+                                            else np.empty((0))
+        ]).reshape((-1, 1))
+    if zero_diagonal and lp.lower() == 'tm':           # diagonal of C -> b     
+        b = np.row_stack([b, np.zeros((a.shape[0] - b.shape[0], 1))])
+    # check dimensions of `a` and `b` ---------------------------------------- #
+    if a.shape[0] != b.shape[0]:
+        raise LPpinvError('`a` and `b` are not conformable')
+    # drop missing values of `a` and `b` ------------------------------------- #
+    a = a[~(np.isnan(a).any(axis=1) | np.isnan(b).any(axis=1))]
+    b = b[~(np.isnan(a).any(axis=1) | np.isnan(b).any(axis=1))]
+    C = M = C[~np.isnan(C).any(axis=1)].shape[0]       # clear memory           
+    S =     S.shape[1]
+    # check dimensions of `a` and `b` ---------------------------------------- #
+    if a.shape[0] != b.shape[0]:
+        raise LPpinvError('`a` and `b` are not conformable')
+
+    # obtain the SVD-based solution of the matrix equation `a @ x = b` ------- #
+    x, res, rank, s = lstsq(a, b, cond=tolerance)      # solution, NRMSE, R2_C  
+    e = np.row_stack([
+        (np.sqrt(np.sum((b - a @ x) ** 2) / (r := b.shape[0]) / np.var(b))),
+        (1 - np.sum((b - a @ x)[:C] ** 2) / np.sum((b - b / C)[:C] ** 2) if C
+         else np.nan)
+    ])
+    # regression results (if applicable) ------------------------------------- #
+    ols   = None
+    if lp.lower() != 'custom' and a.shape[1] <= b.shape[0]:
+        ols = OLS(b, a).fit()
+        print(ols.summary(alpha=round(1-level/100, 2)))
+    # NRMSE t-test for `a', based on MC with iterate simulations ------------- #
+    ttest = [None, None, None]
+    if not np.isnan(e[0,0]) and mc:                    # skip if NRMSE == np.nan
+        e = np.row_stack([
+            e,
+            (tmp := np.trunc(np.log10(iterate))) + np.trunc(tmp / 3) + 2
+        ])                                             # format: %e[3].0fc      
+        print('\nSimulations (\033[1m' + '{:.0f}'.format(iterate) + '\033[0m)')
+        print('----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5\n')
+        np.random.seed(seed)
+        for i in range(1, iterate + 1):
+            e = np.row_stack([
+                e,
+                np.sqrt(np.sum(((b := distribution(r, 1))                     -
+                                a @ lstsq(a, b, cond=tolerance)[0]) ** 2) / r /
+                        np.var(b))
             ])
-            if diag:                                   # diagonal of `a`
-                a = np.row_stack([a, [
-                    np.kron(
-                        np.identity(min(r, c))[i], np.identity(max(r, c))[i]
-                    ) for i in range(min(r, c))
-                ]])
-            if np.array(lhs[0]).size:
-                a = np.row_stack([a, np.array(lhs)])
-        if lp == 'custom':                             # LS-LP type: custom
-            a = np.array(lhs)
-        if np.array(svar).size:                        # slack variables
-            a = np.column_stack([a, (
-                np.concatenate([
-                    np.array(svar), np.zeros(b.size - np.array(svar).size)
-                ]) if lp == 'cOLS' else np.array(svar)
-            ).T])
-        assert a.size                                  # check for `a`
-    except:
-        raise LPpinvError("Misspecified LHS, RHS, or SVAR")
+            if i %  5 == 0: print('.....', end='')
+            if i % 50 == 0: print(('{:' + str(int(e[2,0])) + '.0f}').format(i))
+        if trace:
+            ttest[0]          = ttest_1samp(e[3:,0], popmean=e[0,0],
+                                                  alternative='less'     )
+            statistic, pvalue = ttest[0]
+            ci_lb,     ci_ub  = ttest[0].confidence_interval(level / 100 )
+            f = np.ceil(np.log10(abs(statistic))) + 6
+            print('\n'  + 'One-sample t test'                            +
+                  '\n'  + 'H0: mean      = \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
+                                                                '\033[0m',
+                  '  Mean:\033[1m                       '                +
+                  ('{:' + str(int(f)) + '.4f}').format(np.mean(e[3:,0])) )
+            print(        'Ha: mean      < \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
+                                                                '\033[0m',
+                  '  Std. dev.:\033[1m                  '                +
+                  ('{:' + str(int(f)) + '.4f}').format(np.std(e[3:,0],
+                                                                 ddof=1)))
+            print(        'Pr(T < t)     = \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(pvalue), '\033[0m',
+                  '  '  + str(level)  + '% conf. interval:\033[1m'       +
+                  ('{:' + str(int(f)) + '.4f}').format(ci_lb) + ' '      +
+                  ('{:' + str(int(f)) + '.4f}').format(ci_ub) + '\033[0m')
+            ttest[1]          = ttest_1samp(e[3:,0], popmean=e[0,0],
+                                                  alternative='two-sided')
+            statistic, pvalue = ttest[1]
+            ci_lb,     ci_ub  = ttest[1].confidence_interval(level / 100 )
+            f = np.ceil(np.log10(abs(statistic))) + 6
+            print('\n'  + 'H0: mean      = \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
+                                                                '\033[0m',
+                  '  Mean:\033[1m                       '                +
+                  ('{:' + str(int(f)) + '.4f}').format(np.mean(e[3:,0])) )
+            print(        'Ha: mean      !=\033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
+                                                                '\033[0m',
+                  '  Std. dev.:\033[1m                  '                +
+                  ('{:' + str(int(f)) + '.4f}').format(np.std(e[3:,0],
+                                                                 ddof=1)))
+            print(        'Pr(|T| > |t|) = \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(pvalue), '\033[0m',
+                  '  '  + str(level)  + '% conf. interval:\033[1m'       +
+                  ('{:' + str(int(f)) + '.4f}').format(ci_lb) + ' '      +
+                  ('{:' + str(int(f)) + '.4f}').format(ci_ub) + '\033[0m')
+            ttest[2]          = ttest_1samp(e[3:,0], popmean=e[0,0],
+                                                  alternative='greater'  )
+            statistic, pvalue = ttest[2]
+            ci_lb,     ci_ub  = ttest[2].confidence_interval(level / 100 )
+            f = np.ceil(np.log10(abs(statistic))) + 6
+            print('\n'  + 'H0: mean      = \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
+                                                                '\033[0m',
+                  '  Mean:\033[1m                       '                +
+                  ('{:' + str(int(f)) + '.4f}').format(np.mean(e[3:,0])) )
+            print(        'Ha: mean      > \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
+                                                                '\033[0m',
+                  '  Std. dev.:\033[1m                  '                +
+                  ('{:' + str(int(f)) + '.4f}').format(np.std(e[3:,0],
+                                                                 ddof=1)))
+            print(        'Pr(T > t)     = \033[1m',
+                  ('{:' + str(int(f)) + '.4f}').format(pvalue), '\033[0m',
+                  '  '  + str(level)  + '% conf. interval:\033[1m'       +
+                  ('{:' + str(int(f)) + '.4f}').format(ci_lb) + ' '      +
+                  ('{:' + str(int(f)) + '.4f}').format(ci_ub) + '\033[0m')
 
-    # Obtain an SVD-based solution ------------------------------------------- #
-    soln = list(np.linalg.lstsq(a, b, rcond))
-    soln[1] = np.sqrt(
-        np.sum(np.square(b - a @ soln[0])) /           # normalized RMSE
-        len(b) / np.var(b)
+    # return the solution x, matrix a, and NRMSE ----------------------------- #
+    return LPpinvResult(
+        ols,
+        tuple(ttest),
+        (x[:x.shape[0]-S].reshape((-1, c)) if lp.lower() == 'tm'
+                                           else x[:x.shape[0]-S]),
+        a,
+        e[0,0],
+        (e[1,0] if e[1,0] >= 0
+                else np.nan)
     )
-    if np.array(svar).size:                            # slack variables
-        if lp == 'cOLS':
-            soln[0] = soln[0][0:-1]
-        if lp == 'TM':
-            soln[0] = soln[0][0:r * c]
-    if lp == 'TM':                                     # LS-LP type: TM
-        soln[0] = soln[0].reshape(r, c)
-    soln[2] = a, soln[2]
-
-    # Return the solution ---------------------------------------------------- #
-    return soln
