@@ -9,7 +9,7 @@ long_description = (this_directory / "README.md").read_text()
 setup(
     name = 'lppinv',
     packages = ['lppinv'],
-    version = '0.4.0',
+    version = '0.4.2',
     license = 'MIT',
     description = 'A non-iterated general implementation of the LPLS estimator for cOLS, TM, and custom cases',
     long_description=long_description,
@@ -17,7 +17,7 @@ setup(
     author = 'econcz',
     author_email = '29724411+econcz@users.noreply.github.com',
     url = 'https://github.com/econcz/lppinv',
-    download_url = 'https://github.com/econcz/lppinv/archive/pypi-0_4_0.tar.gz',
+    download_url = 'https://github.com/econcz/lppinv/archive/pypi-0_4_2.tar.gz',
     keywords = [
         'estimator', 'linear programming', 'least squares',
         'OLS constrained in values', 'transaction matrix', 'custom',

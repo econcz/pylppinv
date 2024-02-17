@@ -109,8 +109,8 @@ def solve(
     x, res, rank, s = lstsq(a, b, cond=tolerance)      # solution, NRMSE, R2_C  
     e = np.row_stack([
         (np.sqrt(np.sum((b - a @ x) ** 2) / (r := b.shape[0]) / np.var(b))),
-        (1 - np.sum((b - a @ x)[:C] ** 2) / np.sum((b - b / C)[:C] ** 2) if C
-         else np.nan)
+        (1 - np.sum((b[:C] - (a @ x)[:C]) ** 2) / np.sum((b[:C] -
+         np.mean(b[:C])) ** 2) if C else np.nan)
     ])
     # regression results (if applicable) ------------------------------------- #
     ols   = None
@@ -210,6 +210,6 @@ def solve(
                                            else x[:x.shape[0]-S]),
         a,
         e[0,0],
-        (e[1,0] if e[1,0] >= 0
+        (e[1,0] if e[1,0] >= 0 and e[1,0] <= 1
                 else np.nan)
     )

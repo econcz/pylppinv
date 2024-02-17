@@ -9,7 +9,7 @@ OLS constrained in values (**cOLS**) is an estimation based on constraints in th
 **Example of a cOLS problem:**  
 *Estimate the trend and the cyclical component of a country's GDP given the textbook or any other definition of its peaks, troughs, and saddles. For a pre-LPLS approach to this problem, see (Bolotov, 2014).*
 
-Transaction Matrix (**TM**) of size (**M x N**) is a formal model of interaction (allocation, assignment, etc.). between **M** and **N** elements in any imaginable system, such as intercompany transactions (netting tables), industries within/between economies (input-output tables), cross-border trade/investment (trade/investment matrices), etc., where **row** and **column sums** are known, but **individual elements** of the TM may not be:  
+Transaction Matrix (**TM**) of size (**M x N**) is a formal model of interaction (allocation, assignment, etc.) between **M** and **N** elements in any imaginable system, such as intercompany transactions (netting tables), industries within/between economies (input-output tables), cross-border trade/investment (trade/investment matrices), etc., where **row** and **column sums** are known, but **individual elements** of the TM may not be:  
 
 - a netting table is a type of **TM** where **M = N** and the elements are subsidiaries of a MNC;
 - an input-output table (IOT) is a type of **TM** where **M = N** and the elements are industries;
