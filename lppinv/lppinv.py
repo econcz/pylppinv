@@ -1,215 +1,158 @@
-import numpy           as     np
-from   scipy.linalg    import lstsq
-from   scipy.stats     import ttest_1samp
-from   statsmodels.api import OLS
+import numpy                           as np
+from   typing          import Sequence
+from   collections.abc import Sequence as sq
+from   clsp            import CLSP
 
-class LPpinvResult: # -------------------------------------------------------- #
-    """result class  """
-    def __init__(self, ols, ttest, x, a, nrmse, r2_c):
-        self.OLSResults  = ols
-        self.TtestResult = ttest
-        self.solution    = x
-        self.a           = a
-        self.nrmse       = nrmse
-        self.r2_c        = r2_c
-    def __repr__(self):
-        return('LPpinvResult('                                                 +
-                    'OLSResults='        + str(self.OLSResults       ) + ', '  +
-                    'TtestResult='       + str(self.TtestResult      ) + ', '  +
-                    'solution=np.array(' + str(self.solution.tolist()) + '), ' +
-                    'a=np.array('        + str(self.a.tolist()       ) + '), ' +
-                    'nrmse='             + str(self.nrmse            ) + ', '  +
-                    'r2_c='              + str(self.r2_c             ) + ')'   )
+class LPPinvInputError(Exception):
+    """
+    Exception class for LPPinv-related input errors.
 
-class LPpinvError(Exception): # ---------------------------------------------- #
-    """error class   """
-    pass
+    Represents internal failures in Linear Programming via Pseudoinversion
+    routines due to malformed or incompatible input. Supports structured
+    messaging and optional diagnostic augmentation.
 
-def runiform(
-    # Function arguments (parameters) ---------------------------------------- #
-    r=None, c=None
-):
-    """dummy function"""
-    return (np.random.uniform(low=0.0, high=1.0, size=(r, c)))
+    Parameters
+    ----------
+    message : str, optional
+        Description of the error. Defaults to a generic LPPinv message.
 
-def solve(
-    # Function arguments (parameters) ---------------------------------------- #
-    cols=False, tm=False, rhs=np.empty((0,0)), model=np.empty((0,0)),
-    constraints=np.empty((0,0)), slackvars=np.empty((0,0)), zero_diagonal=False,
-    tolerance=None, level=95, seed=123456789, iterate=300,
-    distribution=runiform, mc=True, trace=True
-):
-    """main function """
-    # general configuration -------------------------------------------------- #
-    lp = 'cols' if cols else 'tm' if tm else 'custom'
-    if cols and tm:
-        raise LPpinvError('Arguments cols and tm are mutually incompatible')
-    b  = np.array(rhs  )
-    M  = np.array(model)
-    C  = np.array(constraints)
-    S  = np.array(slackvars)
-    if level != int(level) or not (0 <= level <= 100):
-        raise LPpinvError('The confidence level must lie between 0 and 99')
+    code : int or str, optional
+        Optional error code or identifier for downstream handling.
 
-    # prepare LHS (left-hand side), `a`, and RHS (right-hand side), `b` ------ #
-    if lp.lower() == 'cols':                           # LS-LP type: cOLS       
-        if ((C.shape[0] + M.shape[0] > b.shape[0])):
-            b = np.concatenate([b, b])
-    if lp.lower() == 'tm':                             # LS-LP type: TM         
-        if (not b.shape[0] or ((b.shape[0] > 1) and (b.shape[1] != 2))
-                           or ((S.shape[0] > 1) and (S.shape[1] != 2))):
-            raise LPpinvError('TM requires two columns in `b`')
-        # C -> characteristic matrix                                            
-        i = b.shape[0] - M.shape[0]
-        r = np.sum(b[:i,0] < np.inf)                   # rows and cols          
-        c = np.sum(b[:i,1] < np.inf)
-        C = np.row_stack([
-            np.kron(np.identity(r), np.ones(c)),       # rowsums (first)        
-            np.kron(np.ones(r), np.identity(c)),       # colsums                
-        ])
-        # S -> characteristic matrix                                            
-        if S.shape != (0,0):
-            S =(lambda S: S[~np.isnan(S).any(axis=1)])(np.concatenate([
-                S[:,0], S[:,1]
-            ]).reshape((-1, 1)))
-    # M, C, S -> `a` --------------------------------------------------------- #
-    if zero_diagonal and lp.lower() == 'tm':           # diagonal of C -> M     
-        M = np.row_stack([
-            M if M.shape[0] else np.empty((0, r * c)),
-            [np.kron(np.identity(min(r, c))[i], np.identity(max(r, c))[i])
-             for i in range(min(r, c))]
-        ])
-    a = np.row_stack([
-        np.column_stack([C, S if S.shape[0] else np.empty((C.shape[0], 0))])
-        if C.shape[0]            else np.empty((0, M.shape[1] + S.shape[1])),
-        np.column_stack([M, np.zeros((M.shape[0],  S.shape[1]))           ])
-        if M.shape[0]            else np.empty((0, C.shape[1] + S.shape[1]))
-    ])
-    # `b` -> (-1, 1) --------------------------------------------------------- #
-    if lp.lower() == 'tm':
-        b = np.concatenate([b[:r,0], b[:c,1],
-            np.sum(b[max(r, c):,:], axis=1) if b.shape[0] > max(r, c)
-                                            else np.empty((0))
-        ]).reshape((-1, 1))
-    if zero_diagonal and lp.lower() == 'tm':           # diagonal of C -> b     
-        b = np.row_stack([b, np.zeros((a.shape[0] - b.shape[0], 1))])
-    # check dimensions of `a` and `b` ---------------------------------------- #
-    if a.shape[0] != b.shape[0]:
-        raise LPpinvError('`a` and `b` are not conformable')
-    # drop missing values of `a` and `b` ------------------------------------- #
-    a = a[~(np.isnan(a).any(axis=1) | np.isnan(b).any(axis=1))]
-    b = b[~(np.isnan(a).any(axis=1) | np.isnan(b).any(axis=1))]
-    C = M = C[~np.isnan(C).any(axis=1)].shape[0]       # clear memory           
-    S =     S.shape[1]
-    # check dimensions of `a` and `b` ---------------------------------------- #
-    if a.shape[0] != b.shape[0]:
-        raise LPpinvError('`a` and `b` are not conformable')
+    Usage
+    -----
+    raise LPPinvInputError("A_ub and b_ub are incompatible", code=201)
+    """
+    
+    def __init__(self, message: str = "An error occurred in LPPinv",
+                 code: int | str | None = None):
+        self.message = message
+        self.code    = code
+        full_message = f"{message} (Code: {code})" if code is not None         \
+                                                   else message
+        super().__init__(full_message)
+        
+    def __str__(self) -> str:
+        return self.message if self.code is None                               \
+                            else f"{self.message} [Code: {self.code}]"
+    
+    def as_dict(self) -> dict:
+        """
+        Return the error as a dictionary for structured logging or JSON output.
+        """
+        return {"error": self.message, "code": self.code}
 
-    # obtain the SVD-based solution of the matrix equation `a @ x = b` ------- #
-    x, res, rank, s = lstsq(a, b, cond=tolerance)      # solution, NRMSE, R2_C  
-    e = np.row_stack([
-        (np.sqrt(np.sum((b - a @ x) ** 2) / (r := b.shape[0]) / np.var(b))),
-        (1 - np.sum((b[:C] - (a @ x)[:C]) ** 2) / np.sum((b[:C] -
-         np.mean(b[:C])) ** 2) if C else np.nan)
-    ])
-    # regression results (if applicable) ------------------------------------- #
-    ols   = None
-    if lp.lower() != 'custom' and a.shape[1] <= b.shape[0]:
-        ols = OLS(b, a).fit()
-        print(ols.summary(alpha=round(1-level/100, 2)))
-    # NRMSE t-test for `a', based on MC with iterate simulations ------------- #
-    ttest = [None, None, None]
-    if not np.isnan(e[0,0]) and mc:                    # skip if NRMSE == np.nan
-        e = np.row_stack([
-            e,
-            (tmp := np.trunc(np.log10(iterate))) + np.trunc(tmp / 3) + 2
-        ])                                             # format: %e[3].0fc      
-        print('\nSimulations (\033[1m' + '{:.0f}'.format(iterate) + '\033[0m)')
-        print('----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5\n')
-        np.random.seed(seed)
-        for i in range(1, iterate + 1):
-            e = np.row_stack([
-                e,
-                np.sqrt(np.sum(((b := distribution(r, 1))                     -
-                                a @ lstsq(a, b, cond=tolerance)[0]) ** 2) / r /
-                        np.var(b))
-            ])
-            if i %  5 == 0: print('.....', end='')
-            if i % 50 == 0: print(('{:' + str(int(e[2,0])) + '.0f}').format(i))
-        if trace:
-            ttest[0]          = ttest_1samp(e[3:,0], popmean=e[0,0],
-                                                  alternative='less'     )
-            statistic, pvalue = ttest[0]
-            ci_lb,     ci_ub  = ttest[0].confidence_interval(level / 100 )
-            f = np.ceil(np.log10(abs(statistic))) + 6
-            print('\n'  + 'One-sample t test'                            +
-                  '\n'  + 'H0: mean      = \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
-                                                                '\033[0m',
-                  '  Mean:\033[1m                       '                +
-                  ('{:' + str(int(f)) + '.4f}').format(np.mean(e[3:,0])) )
-            print(        'Ha: mean      < \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
-                                                                '\033[0m',
-                  '  Std. dev.:\033[1m                  '                +
-                  ('{:' + str(int(f)) + '.4f}').format(np.std(e[3:,0],
-                                                                 ddof=1)))
-            print(        'Pr(T < t)     = \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(pvalue), '\033[0m',
-                  '  '  + str(level)  + '% conf. interval:\033[1m'       +
-                  ('{:' + str(int(f)) + '.4f}').format(ci_lb) + ' '      +
-                  ('{:' + str(int(f)) + '.4f}').format(ci_ub) + '\033[0m')
-            ttest[1]          = ttest_1samp(e[3:,0], popmean=e[0,0],
-                                                  alternative='two-sided')
-            statistic, pvalue = ttest[1]
-            ci_lb,     ci_ub  = ttest[1].confidence_interval(level / 100 )
-            f = np.ceil(np.log10(abs(statistic))) + 6
-            print('\n'  + 'H0: mean      = \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
-                                                                '\033[0m',
-                  '  Mean:\033[1m                       '                +
-                  ('{:' + str(int(f)) + '.4f}').format(np.mean(e[3:,0])) )
-            print(        'Ha: mean      !=\033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
-                                                                '\033[0m',
-                  '  Std. dev.:\033[1m                  '                +
-                  ('{:' + str(int(f)) + '.4f}').format(np.std(e[3:,0],
-                                                                 ddof=1)))
-            print(        'Pr(|T| > |t|) = \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(pvalue), '\033[0m',
-                  '  '  + str(level)  + '% conf. interval:\033[1m'       +
-                  ('{:' + str(int(f)) + '.4f}').format(ci_lb) + ' '      +
-                  ('{:' + str(int(f)) + '.4f}').format(ci_ub) + '\033[0m')
-            ttest[2]          = ttest_1samp(e[3:,0], popmean=e[0,0],
-                                                  alternative='greater'  )
-            statistic, pvalue = ttest[2]
-            ci_lb,     ci_ub  = ttest[2].confidence_interval(level / 100 )
-            f = np.ceil(np.log10(abs(statistic))) + 6
-            print('\n'  + 'H0: mean      = \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
-                                                                '\033[0m',
-                  '  Mean:\033[1m                       '                +
-                  ('{:' + str(int(f)) + '.4f}').format(np.mean(e[3:,0])) )
-            print(        'Ha: mean      > \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(e[0,0]),
-                                                                '\033[0m',
-                  '  Std. dev.:\033[1m                  '                +
-                  ('{:' + str(int(f)) + '.4f}').format(np.std(e[3:,0],
-                                                                 ddof=1)))
-            print(        'Pr(T > t)     = \033[1m',
-                  ('{:' + str(int(f)) + '.4f}').format(pvalue), '\033[0m',
-                  '  '  + str(level)  + '% conf. interval:\033[1m'       +
-                  ('{:' + str(int(f)) + '.4f}').format(ci_lb) + ' '      +
-                  ('{:' + str(int(f)) + '.4f}').format(ci_ub) + '\033[0m')
+def lppinv(
+    c:      Sequence[float]                         | None = None,
+    A_ub:   Sequence[Sequence[float]]               | None = None,
+    b_ub:   Sequence[float]                         | None = None,
+    A_eq:   Sequence[Sequence[float]]               | None = None,
+    b_eq:   Sequence[float]                         | None = None,
+    bounds: list[tuple[float | None, float | None]] |                          \
+                 tuple[float | None, float | None]  | None = None,
+    *args, **kwargs
+) -> CLSP:
+    """
+    Solve a linear program via Convex Least Squares Programming (CLSP)
+    estimator.
 
-    # return the solution x, matrix a, and NRMSE ----------------------------- #
-    return LPpinvResult(
-        ols,
-        tuple(ttest),
-        (x[:x.shape[0]-S].reshape((-1, c)) if lp.lower() == 'tm'
-                                           else x[:x.shape[0]-S]),
-        a,
-        e[0,0],
-        (e[1,0] if e[1,0] >= 0 and e[1,0] <= 1
-                else np.nan)
-    )
+    Parameters (SciPy linprog-compatible)
+    -------------------------------------
+    c : array_like of shape (p,), optional
+        Objective function coefficients. Accepted for API parity; not used
+        by CLSP.
+    A_ub : array_like of shape (i, p), optional
+        Matrix for inequality constraints A_ub @ x <= b_ub.
+    b_ub : array_like of shape (i,), optional
+        Right-hand side vector for inequality constraints.
+    A_eq : array_like of shape (j, p), optional
+        Matrix for equality constraints A_eq @ x = b_eq.
+    b_eq : array_like of shape (j,), optional
+        Right-hand side vector for equality constraints.
+    bounds : sequence of (low, high), optional
+        Bounds on variables. If a single tuple (low, high) is given, it is
+        applied to all variables. If None, defaults to (0, None) for each
+        variable (non-negativity).
+
+    Returns
+    -------
+    CLSP
+        The fitted CLSP object. Consult https://pypi.org/project/pyclsp/
+    """
+    # assert conformability of constraint sets (A_ub, b_ub) and (A_eq, b_eq)
+    if  not ((A_ub is not None and b_ub is not None) or
+             (A_eq is not None and b_eq is not None)):
+        raise LPPinvInputError("At least one complete constraint set "
+                               "(A_ub, b_ub) or (A_eq, b_eq) must be "
+                               "provided.")
+    if  A_ub is not None:
+        A_ub = np.asarray(A_ub, dtype=np.float64)
+        if A_ub.ndim == 1:
+            A_ub = A_ub.reshape(1, -1)
+        b_ub = np.asarray(b_ub, dtype=np.float64).reshape(-1, 1)
+        if A_ub.shape[0] != b_ub.shape[0]:
+            raise LPPinvInputError(f"A_ub and b_ub must have the same number "
+                                   f"of rows: "
+                                   f"{A_ub.shape[0]} vs {b_ub.shape[0]}")
+        n_vars = A_ub.shape[1]                         # number of variables
+    if  A_eq is not None:
+        A_eq = np.asarray(A_eq, dtype=np.float64)
+        if A_eq.ndim == 1:
+            A_eq = A_eq.reshape(1, -1)
+        b_eq = np.asarray(b_eq, dtype=np.float64).reshape(-1, 1)
+        if A_eq.shape[0] != b_eq.shape[0]:
+            raise LPPinvInputError(f"A_eq and b_eq must have the same number "
+                                   f"of rows: "
+                                   f"{A_eq.shape[0]} vs {b_eq.shape[0]}")
+        n_vars = A_eq.shape[1]                         # number of variables
+
+    # (b) Construct the right-hand side vector
+    if  bounds is None:                                # normalize bounds
+        bounds = (0, None)
+    if  isinstance(bounds, tuple):
+        bounds = [bounds] * n_vars                     # replicate (low, high)
+    elif   isinstance(bounds, sq):
+        if len(bounds) > 1 and len(bounds) != n_vars:
+            raise LPPinvInputError(f"Bounds length {len(bounds)} does not "
+                                   f"match number of variables {n_vars}.")
+        elif len(bounds) == 1:
+            bounds = bounds * n_vars                   # replicate (low, high)
+    if any((l is not None and l < 0) or
+           (h is not None and h < 0) for l, h in bounds):
+        raise LPPinvInputError("Negative lower or upper bounds are not "
+                               "allowed in linear programs.")
+    b = np.empty((0, 1))
+    if b_ub is not None:
+        b = b_ub
+    if b_eq is not None:
+        b = np.vstack([b, b_eq])
+    b = np.vstack([b, np.array([l if l is not None else 0      for l, h
+                                in bounds]).reshape(-1, 1),
+                      np.array([h if h is not None else np.inf for l, h
+                                in bounds]).reshape(-1, 1)])
+
+    # (C), (S) Construct conformable blocks for the design matrix A
+    if  A_ub is not None and A_eq is not None:
+        if A_ub.shape[1] != A_eq.shape[1]:
+            raise LPPinvInputError(f"A_ub and A_eq must have the same number "
+                                   f"of columns: "
+                                   f"{A_ub.shape[1]} vs {A_eq.shape[1]}")
+    C = np.empty((0, n_vars))
+    S = np.empty((0, 0))
+    if  A_ub is not None:
+        C = A_ub
+        S = np.eye(A_ub.shape[0])
+    if  A_eq is not None:
+        C = np.vstack([C, A_eq])
+        S = np.vstack([S, np.zeros((A_eq.shape[0], S.shape[1]))])
+    C = np.vstack([C, np.tile(np.eye(n_vars), (2,1))])
+    S = np.vstack([np.hstack([S, np.zeros((S.shape[0],  n_vars))]), np.tile(
+                   np.hstack([np.zeros((n_vars, S.shape[1])), np.eye(n_vars)]),
+                   (2,1))])
+
+    # perform estimation and return the result
+    finite_rows = np.isfinite(b).ravel()               # drop rows with np.inf
+    return CLSP().solve(problem='general', C=C[finite_rows, :],
+                                           S=S[finite_rows, :],
+                                           b=b[finite_rows],
+                        *args, **kwargs)

@@ -1,2 +1,8 @@
-from lppinv.lppinv import LPpinvError                  # error class
-from lppinv.lppinv import solve                        # main function
+__version__ = "1.0.4"
+
+from .lppinv import lppinv
+
+__all__ = [
+    "lppinv",
+    "__version__"
+]
