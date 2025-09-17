@@ -1,7 +1,8 @@
-# Linear Programming via Pseudoinverse Estimation
+# Linear Programming via Regularized Least Squares
 
-The **Linear Programming via Pseudoinverse Estimation (LPPinv)** is a two-stage estimation method that reformulates linear programs as structured least-squares problems. Based on the [Convex Least Squares Programming (CLSP)](https://pypi.org/project/pyclsp/ "Convex Least Squares Programming") framework, LPPinv solves linear inequality, equality, and bound constraints by (1) constructing a canonical constraint system and computing a pseudoinverse projection, followed by (2) a convex-programming correction stage to refine the solution under additional regularization (e.g., Lasso, Ridge, or Elastic Net).  
-LPPinv is intended for **underdetermined** and **ill-posed** linear problems, for which standard solvers fail.
+The **Linear Programming via Regularized Least Squares (LPPinv)** is a two-stage estimation method that reformulates linear programs as structured least-squares problems. Based on the [Convex Least Squares Programming (CLSP)](https://pypi.org/project/pyclsp/ "Convex Least Squares Programming") framework, LPPinv solves linear inequality, equality, and bound constraints by (1) constructing a canonical constraint system and computing a pseudoinverse projection, followed by (2) a convex-programming correction stage to refine the solution under additional regularization (e.g., Lasso, Ridge, or Elastic Net).  
+LPPinv is intended for **underdetermined** and **ill-posed** linear problems, for which standard solvers fail.  
+All calculations are performed in numpy.float64 precision.
 
 ## Installation
 
@@ -12,38 +13,44 @@ pip install pylppinv
 ## Quick Example
 
 ```python
-from lppinv import lppinv
-import numpy as np
+import numpy  as     np
+from   lppinv import lppinv
 
-# Define inequality constraints A_ub @ x <= b_ub
-A_ub = [
-    [1, 1],
-    [2, 1]
-]
-b_ub = [5, 8]
+# LPRLS/QPRLS, based on an underdetermined and potentially infeasible problem
 
-# Define equality constraints A_eq @ x = b_eq
-A_eq = [
-    [1, -1]
-]
-b_eq = [1]
+seed   = 123456789
+rng    = np.random.default_rng(seed)
 
-# Define bounds for x1 and x2
-bounds = [(0, 5), (0, None)]
+# sample (dataset)
+A_ub   = rng.normal(size=(50, 500))                          # underdetermined LP/QP matrix
+A_eq   = rng.normal(size=(25, 500))                          # underdetermined LP/QP matrix
+b_ub   = rng.normal(size=(50,   1))                          # may be inconsistent with A_ub
+b_eq   = rng.normal(size=(25,   1))                          # may be inconsistent with A_eq
+model  = lppinv(
+             A_ub=A_ub, A_eq=A_eq, b_ub=b_ub, b_eq=b_eq,
+             non_negative=False,                             # allow negative values
+             r=1,                                            # a solution without refinement
+             alpha=1.0                                       # a unique MNBLUE estimator
+         )
 
-# Run the LP via CLSP
-result = lppinv(
-    c      = [1, 1],  # not used in CLSP but included for compatibility
-    A_ub   = A_ub,
-    b_ub   = b_ub,
-    A_eq   = A_eq,
-    b_eq   = b_eq,
-    bounds = bounds
-)
+# results
+print("x hat (x_M hat):")
+print(np.round(model.x.flatten(), 4))
 
-# Output solution
-print("Solution vector (x):")
-print(result.x.flatten())
+print("\nNumerical stability:")
+print("  kappaC :", round(model.kappaC, 4))
+print("  kappaB :", round(model.kappaB, 4))
+print("  kappaA :", round(model.kappaA, 4))
+
+print("\nGoodness-of-fit:")
+print("  NRMSE                :", round(model.nrmse,              6))
+print("  Diagnostic band (min):", np.round(np.min(model.x_lower), 4))
+print("  Diagnostic band (max):", np.round(np.max(model.x_upper), 4))
+print("  Monte Carlo t-test:")
+for kw, val in model.ttest(sample_size=30,                   # NRMSE_partial sample
+                           seed=seed, distribution="normal", # seed and distribution
+               ).items():
+    print(f"    {kw}: {float(val):.6f}")
 ```
 
 ## User Reference
@@ -67,8 +74,17 @@ Matrix for equality constraints `A_eq @ x = b_eq`.
 `b_eq` : *array_like* of shape *(j,)*, optional  
 Right-hand side vector for equality constraints.
 
+`non_negative` : *bool*, default = *True*  
+If False, no default nonnegativity is applied.
+
 `bounds` : *sequence* of *(low, high)*, optional  
 Bounds on variables. If a single tuple **(low, high)** is given, it is applied to all variables. If None, defaults to *(0, None)* for each variable (non-negativity).
+
+`replace_value` : *float* or *None*, default = *np.nan*  
+Final replacement value for any cell in the returned CLSP.x that violates the specified bounds by more than the given tolerance.
+
+`tolerance` : *float*, default = *square root of machine epsilon*  
+Convergence tolerance for bounds.
 
 Please note that either `A_ub` and `b_ub` or `A_eq` and `b_eq` must be provided.
 
@@ -80,20 +96,20 @@ Number of refinement iterations for the pseudoinverse-based estimator.
 `Z` : *np.ndarray* or *None*  
 A symmetric idempotent matrix (projector) defining the subspace for Bott–Duffin pseudoinversion. If *None*, the identity matrix is used, reducing the Bott–Duffin inverse to the Moore–Penrose case.
 
-`tolerance` : *float*, default = *square root of machine epsilon*  
-Convergence tolerance for NRMSE change between refinement iterations.
-
 `iteration_limit` : *int*, default = *50*  
 Maximum number of iterations allowed in the refinement loop.
 
 `final` : *bool*, default = *True*  
 If *True*, a convex programming problem is solved to refine `zhat`. The resulting solution `z` minimizes a weighted L1/L2 norm around `zhat` subject to `Az = b`.
 
-`alpha` : *float*, default = *1.0*  
-Regularization parameter (weight) in the final convex program:  
-- `α = 0`: Lasso (L1 norm)  
-- `α = 1`: Tikhonov Regularization/Ridge (L2 norm)  
-- `0 < α < 1`: Elastic Net
+`alpha` : *float*, *list[float]* or *None*, default = *None*  
+    Regularization parameter (weight) in the final convex program:  
+    - `α = 0`: Lasso (L1 norm)  
+    - `α = 1`: Tikhonov Regularization/Ridge (L2 norm)  
+    - `0 < α < 1`: Elastic Net
+    If a scalar float is provided, that value is used after clipping to [0, 1].
+    If a list/iterable of floats is provided, each candidate is evaluated via a full solve, and the α with the smallest NRMSE is selected.
+    If None, α is chosen, based on an error rule: α = min(1.0, NRMSE_{α = 0} / (NRMSE_{α = 0} + NRMSE_{α = 1} + tolerance))   
 
 `*args`, `**kwargs` : optional  
 CVXPY arguments passed to the CVXPY solver.
