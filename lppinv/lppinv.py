@@ -178,11 +178,13 @@ def lppinv(
                                                S=(S[finite_rows, :]
                                                   )[:,nonzero_cols],
                                                b=(b[finite_rows, :]),
+                                               tolerance=tolerance,
                             **kw)
 
     # (result) Replace out-of-bound values with `replace_value`
     x        = result.x.reshape(-1, 1)
-    x_lb     = np.array([l if l is not None else -np.inf
+    x_lb     = np.array([l if l is not None else (0 if non_negative else
+                                                  -np.inf)
                          for  l, _ in bounds]).reshape(-1, 1)
     x_ub     = np.array([h if h is not None else  np.inf
                          for  _, h in bounds]).reshape(-1, 1)
