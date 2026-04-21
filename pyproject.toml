@@ -1,6 +1,6 @@
 [project]
 name = "pylppinv"
-version = "1.6.0"
+version = "2.0.0"
 description = "Linear Programming via Regularized Least Squares"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,7 +10,7 @@ authors = [
   { name = "The Economist", email = "29724411+econcz@users.noreply.github.com" }
 ]
 keywords = [
-  "linear-programing",
+  "linear-programming",
   "convex-optimization",
   "least-squares",
   "generalized-inverse",
@@ -27,7 +27,7 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=1.24",
-  "pyclsp>=1.1.2"
+  "pyclsp>=3.0.0"
 ]
 
 [project.urls]
