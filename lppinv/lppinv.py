@@ -43,16 +43,17 @@ class LPPinvInputError(Exception):
         return {"error": self.message, "code": self.code}
 
 def lppinv(
-    c:             Sequence[float]                         | None = None,
-    A_ub:          Sequence[Sequence[float]]               | None = None,
-    b_ub:          Sequence[float]                         | None = None,
-    A_eq:          Sequence[Sequence[float]]               | None = None,
-    b_eq:          Sequence[float]                         | None = None,
-    non_negative:  bool                                           = True,
-    bounds:        list[tuple[float | None, float | None]] |                   \
-                        tuple[float | None, float | None]  | None = None,
-    replace_value: float                                   | None = np.nan,
-    tolerance:     float = np.sqrt(np.finfo(float).eps),
+    c:              Sequence[float]                         | None = None,
+    A_ub:           Sequence[Sequence[float]]               | None = None,
+    b_ub:           Sequence[float]                         | None = None,
+    A_eq:           Sequence[Sequence[float]]               | None = None,
+    b_eq:           Sequence[float]                         | None = None,
+    non_negative:   bool                                           = True,
+    bounds:         list[tuple[float | None, float | None]] |                  \
+                         tuple[float | None, float | None]  | None = None,
+    replace_value:  float                                   | None = np.nan,
+    tolerance:      float = np.sqrt(np.finfo(float).eps),
+    cond_tolerance: float                                   | None = None,
     *args, **kwargs
 ) -> CLSP:
     """
@@ -84,6 +85,9 @@ def lppinv(
     tolerance : float, optional
         Convergence tolerance for bounds. Default is the square root of
         machine epsilon.
+    cond_tolerance : float or None, default = None
+        Singular-value cutoff for the custom condition number function.
+        If None, the implementation uses an internal relative cutoff of 1e-14.
 
     Returns
     -------
@@ -178,8 +182,8 @@ def lppinv(
                                                S=(S[finite_rows, :]
                                                   )[:,nonzero_cols],
                                                b=(b[finite_rows, :]),
-                                               tolerance=tolerance,
-                            **kw)
+                                       tolerance=tolerance,
+                                  cond_tolerance=cond_tolerance, **kw)
 
     # (result) Replace out-of-bound values with `replace_value`
     x        = result.x.reshape(-1, 1)

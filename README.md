@@ -50,13 +50,15 @@ print("  Diagnostic band (max):", np.round(np.max(model.x_upper), 4))
 print("  Bootstrap t-test:")
 for kw, val in model.ttest(sample_size=30,                   # NRMSE sample
                            seed=seed, distribution="normal", # seed and distribution
-               ).items():
+                          ).items():
     print(f"    {kw}: {float(val):.6f}")
 ```
 
 ## User Reference
 
-For comprehensive information on the estimator’s capabilities, advanced configuration options, and implementation details, please refer to the [pyclsp module](https://pypi.org/project/pyclsp/ "Convex Least Squares Programming"), on which LPPinv is based.
+For comprehensive information on the estimator's capabilities, advanced configuration options, and implementation details, please refer to the [pyclsp module](https://pypi.org/project/pyclsp/ "Convex Least Squares Programming"), on which LPPinv is based.
+
+To ensure cross-platform reproducibility, all CLSP implementations use a modified condition number function based on singular values, with a relative cutoff equal to `cond_tolerance * the largest singular value`.
 
 **LPPINV Parameters:**
 
@@ -102,6 +104,10 @@ If *True*, a convex programming problem is solved to refine `zhat`. The resultin
     If a list/iterable of floats is provided, each candidate is evaluated via a full solve, and the α with the smallest NRMSE is selected.<br>
     If None, α is chosen, based on an error rule: α = min(1.0, NRMSE_{α = 0} / (NRMSE_{α = 0} + NRMSE_{α = 1} + tolerance))
 
+`cond_tolerance` : *float* or *None*, default = *None*<br>
+    Singular-value cutoff for the custom condition number function.<br>
+    If *None*, the implementation uses an internal relative cutoff of `1e-14`.
+
 `*args`, `**kwargs` : optional<br>
 CVXPY arguments passed to the CVXPY solver.
 
@@ -133,7 +139,7 @@ Vector containing the slack component of `z`.
 Spectral κ() for *C_canon*.
 
 `self.kappaB`        : *float*<br>
-Spectral κ() for *B* = *C_canon^+ A*.
+Spectral κ() for *B* = *A C_canon^+*.
 
 `self.kappaA`        : *float*<br>
 Spectral κ() for `A`.
